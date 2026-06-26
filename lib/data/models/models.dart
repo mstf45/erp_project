@@ -2,6 +2,14 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../core/constants/app_constants.dart';
 
+// Güvenli double çevirici (Firebase çökmelerini engeller)
+double _parseDouble(dynamic value) {
+  if (value == null) return 0.0;
+  if (value is num) return value.toDouble();
+  if (value is String) return double.tryParse(value) ?? 0.0;
+  return 0.0;
+}
+
 // ════════════════════════════════════════════════════════════
 // STOK KARTI MODELİ
 // ════════════════════════════════════════════════════════════
@@ -17,22 +25,22 @@ class StokKarti {
   final double alisFiyati;
   final String paraBirimi;
   final double kdvOrani;
-  final double standartProfilBoyu; // mm
-  final double urunGenisligi;      // mm
-  final double urunYuksekligi;     // mm
-  final double urunKalinligi;      // mm
-  final double birimAgirlik;       // kg/metre
+  final double standartProfilBoyu;
+  final double urunGenisligi;
+  final double urunYuksekligi;
+  final double urunKalinligi;
+  final double birimAgirlik;
   final String ambalajTipi;
   final double paketIciMiktar;
   final double toplamPaketAgirligi;
-  final double maxKullanimEni;     // mm
-  final double maxKullanimYuksekligi; // mm
+  final double maxKullanimEni;
+  final double maxKullanimYuksekligi;
   final String uyumluTapaTipi;
   final double? motorTorku;
   final double? kaldirmaKapasitesi;
-  final double? dikmeDusumPayi;    // mm
-  final double? uzunluk;           // Motor için (dinamik limit)
-  final double? genislik;          // Motor için
+  final double? dikmeDusumPayi;
+  final double? uzunluk;
+  final double? genislik;
   final bool rengeGoreDegisir;
   final String kokKod;
   final bool aktif;
@@ -86,32 +94,32 @@ class StokKarti {
       marka: d['marka'] ?? '',
       renk: d['renk'] ?? '',
       stokTakipBirimi: d['stokTakipBirimi'] ?? 'Adet',
-      minimumStok: (d['minimumStok'] ?? 0).toDouble(),
-      alisFiyati: (d['alisFiyati'] ?? 0).toDouble(),
+      minimumStok: _parseDouble(d['minimumStok']),
+      alisFiyati: _parseDouble(d['alisFiyati']),
       paraBirimi: d['paraBirimi'] ?? 'TRY',
-      kdvOrani: (d['kdvOrani'] ?? 20).toDouble(),
-      standartProfilBoyu: (d['standartProfilBoyu'] ?? 0).toDouble(),
-      urunGenisligi: (d['urunGenisligi'] ?? 0).toDouble(),
-      urunYuksekligi: (d['urunYuksekligi'] ?? 0).toDouble(),
-      urunKalinligi: (d['urunKalinligi'] ?? 0).toDouble(),
-      birimAgirlik: (d['birimAgirlik'] ?? 0).toDouble(),
+      kdvOrani: _parseDouble(d['kdvOrani']),
+      standartProfilBoyu: _parseDouble(d['standartProfilBoyu']),
+      urunGenisligi: _parseDouble(d['urunGenisligi']),
+      urunYuksekligi: _parseDouble(d['urunYuksekligi']),
+      urunKalinligi: _parseDouble(d['urunKalinligi']),
+      birimAgirlik: _parseDouble(d['birimAgirlik']),
       ambalajTipi: d['ambalajTipi'] ?? '',
-      paketIciMiktar: (d['paketIciMiktar'] ?? 0).toDouble(),
-      toplamPaketAgirligi: (d['toplamPaketAgirligi'] ?? 0).toDouble(),
-      maxKullanimEni: (d['maxKullanimEni'] ?? 0).toDouble(),
-      maxKullanimYuksekligi: (d['maxKullanimYuksekligi'] ?? 0).toDouble(),
+      paketIciMiktar: _parseDouble(d['paketIciMiktar']),
+      toplamPaketAgirligi: _parseDouble(d['toplamPaketAgirligi']),
+      maxKullanimEni: _parseDouble(d['maxKullanimEni']),
+      maxKullanimYuksekligi: _parseDouble(d['maxKullanimYuksekligi']),
       uyumluTapaTipi: d['uyumluTapaTipi'] ?? '',
-      motorTorku: d['motorTorku']?.toDouble(),
-      kaldirmaKapasitesi: d['kaldirmaKapasitesi']?.toDouble(),
-      dikmeDusumPayi: d['dikmeDusumPayi']?.toDouble(),
-      uzunluk: d['uzunluk']?.toDouble(),
-      genislik: d['genislik']?.toDouble(),
+      motorTorku: d['motorTorku'] != null ? _parseDouble(d['motorTorku']) : null,
+      kaldirmaKapasitesi: d['kaldirmaKapasitesi'] != null ? _parseDouble(d['kaldirmaKapasitesi']) : null,
+      dikmeDusumPayi: d['dikmeDusumPayi'] != null ? _parseDouble(d['dikmeDusumPayi']) : null,
+      uzunluk: d['uzunluk'] != null ? _parseDouble(d['uzunluk']) : null,
+      genislik: d['genislik'] != null ? _parseDouble(d['genislik']) : null,
       rengeGoreDegisir: d['rengeGoreDegisir'] ?? false,
       kokKod: d['kokKod'] ?? '',
       aktif: d['aktif'] ?? true,
-      mevcutStok: (d['mevcutStok'] ?? 0).toDouble(),
-      satisKarMarji: d['satisKarMarji']?.toDouble(),
-      transitKarMarji: d['transitKarMarji']?.toDouble(),
+      mevcutStok: _parseDouble(d['mevcutStok']),
+      satisKarMarji: d['satisKarMarji'] != null ? _parseDouble(d['satisKarMarji']) : null,
+      transitKarMarji: d['transitKarMarji'] != null ? _parseDouble(d['transitKarMarji']) : null,
     );
   }
 
@@ -178,13 +186,13 @@ class StokKarti {
 // ════════════════════════════════════════════════════════════
 class ReceteSatiri {
   final String id;
-  final String anaUrunKodu;   // Hangi ürünün reçetesi
-  final String kokKod;        // Bileşenin kök kodu (LAM.039.)
+  final String anaUrunKodu;
+  final String kokKod;
   final String stokAdi;
   final bool rengeGoreDegisir;
-  final String miktarFormulu; // 'NET_BOY/39', 'LAMEL_ADETI*2', '1', 'EN/300' vb.
-  final String receteDurumu;  // 'Varsayılan', 'Seçmeli/Ek', 'Alternatif'
-  final List<ReceteSatiri> altRecete; // Alternatif ürünlerin alt reçetesi
+  final String miktarFormulu;
+  final String receteDurumu;
+  final List<ReceteSatiri> altRecete;
 
   const ReceteSatiri({
     required this.id,
@@ -227,7 +235,7 @@ class Bolme {
   final int bolmeNo;
   int enMm;
   int boyMm;
-  PanjurTipi? panjurTipi;       // Bölmeye özgü tip (global'i ezer)
+  PanjurTipi? panjurTipi;
   String? yanDikme;
   String? ortaDikme;
   OrtaDikmeTipi ortaDikmeTipi;
@@ -236,7 +244,6 @@ class Bolme {
   int gozluLamelAdet;
   bool polikarbon;
 
-  // Hesaplanan değerler
   int netDikmeBoy;
   int netLamelEni;
   int lamelAdeti;
@@ -293,8 +300,7 @@ class Bolme {
         : null,
     yanDikme: d['yanDikme'],
     ortaDikme: d['ortaDikme'],
-    ortaDikmeTipi: OrtaDikmeTipi.values
-        .firstWhere((e) => e.name == (d['ortaDikmeTipi'] ?? 'pasif')),
+    ortaDikmeTipi: OrtaDikmeTipi.values.firstWhere((e) => e.name == (d['ortaDikmeTipi'] ?? 'pasif')),
     ilaveLamel: d['ilaveLamel'] ?? false,
     ilaveLamelAdet: d['ilaveLamelAdet'] ?? 0,
     gozluLamelAdet: d['gozluLamelAdet'] ?? 0,
@@ -309,7 +315,7 @@ class Bolme {
 }
 
 // ════════════════════════════════════════════════════════════
-// SİPARİŞ POZ MODELİ (tek bir panjur pozisyonu)
+// SİPARİŞ POZ MODELİ
 // ════════════════════════════════════════════════════════════
 class SiparisPoz {
   final String id;
@@ -330,12 +336,8 @@ class SiparisPoz {
   String siparisNotu;
   String teknikNot;
   String uretimNotu;
-  String urunKitiSecimi; // 'standart', 'alternatif1', 'alternatif2'
-
-  // Hesaplanan reçete satırları
+  String urunKitiSecimi;
   List<HesaplananUrun> hesaplananUrunler;
-
-  // Fiyatlandırma
   double? karMarji;
   double? iskonto;
   bool transitSatis;
@@ -366,75 +368,65 @@ class SiparisPoz {
     this.iskonto,
     this.transitSatis = false,
     this.siraNo = 0,
-  })  : bolmeler = bolmeler?? [Bolme(bolmeNo: 1)],
-  hesaplananUrunler = hesaplananUrunler ?? [];
+  })  : bolmeler = bolmeler ?? [Bolme(bolmeNo: 1)],
+        hesaplananUrunler = hesaplananUrunler ?? [];
 
   factory SiparisPoz.fromMap(Map<String, dynamic> d) => SiparisPoz(
-  id: d['id'] ?? '',
-  renk: d['renk'] ?? '',
-  ozelRenk: d['ozelRenk'] ?? '',
-  panjurTipi: PanjurTipi.values
-      .firstWhere((e) => e.name == (d['panjurTipi'] ?? 'motorlu')),
-  kutuTipi: d['kutuTipi'] != null
-  ? KutuTipi.values.firstWhere((e) => e.name == d['kutuTipi'])
-      : null,
-  kutuOlcusu: d['kutuOlcusu'] ?? '',
-  lamelTipi: LamelTipi.values
-      .firstWhere((e) => e.name == (d['lamelTipi'] ?? 'mm55')),
-  lamelSinirKaldir: d['lamelSinirKaldir'] ?? false,
-  motorMarkasi: d['motorMarkasi'] ?? '',
-  motorTipi: d['motorTipi'] ?? '',
-  enOlcuOpsiyonu: EnOlcuOpsiyonu.values
-      .firstWhere((e) => e.name == (d['enOlcuOpsiyonu'] ?? 'dikmeDahil')),
-  boyOlcuOpsiyonu: BoyOlcuOpsiyonu.values
-      .firstWhere((e) => e.name == (d['boyOlcuOpsiyonu'] ?? 'kutuDahil')),
-  bolmeSayisi: d['bolmeSayisi'] ?? 1,
-    bolmeler: (d['bolmeler'] as List? ?? [])
-      .asMap()
-      .entries
-      .map((e) => Bolme.fromMap(e.value as Map<String, dynamic>, e.key + 1))
-      .toList(),
-  ilaveBoyMm: d['ilaveBoyMm'] ?? 0,
-  siparisNotu: d['siparisNotu'] ?? '',
-  teknikNot: d['teknikNot'] ?? '',
-  uretimNotu: d['uretimNotu'] ?? '',
-  urunKitiSecimi: d['urunKitiSecimi'] ?? 'standart',
-  karMarji: d['karMarji']?.toDouble(),
-  iskonto: d['iskonto']?.toDouble(),
-  transitSatis: d['transitSatis'] ?? false,
-  siraNo: d['siraNo'] ?? 0,
+    id: d['id'] ?? '',
+    renk: d['renk'] ?? '',
+    ozelRenk: d['ozelRenk'] ?? '',
+    panjurTipi: PanjurTipi.values.firstWhere((e) => e.name == (d['panjurTipi'] ?? 'motorlu')),
+    kutuTipi: d['kutuTipi'] != null ? KutuTipi.values.firstWhere((e) => e.name == d['kutuTipi']) : null,
+    kutuOlcusu: d['kutuOlcusu'] ?? '',
+    lamelTipi: LamelTipi.values.firstWhere((e) => e.name == (d['lamelTipi'] ?? 'mm55')),
+    lamelSinirKaldir: d['lamelSinirKaldir'] ?? false,
+    motorMarkasi: d['motorMarkasi'] ?? '',
+    motorTipi: d['motorTipi'] ?? '',
+    enOlcuOpsiyonu: EnOlcuOpsiyonu.values.firstWhere((e) => e.name == (d['enOlcuOpsiyonu'] ?? 'dikmeDahil')),
+    boyOlcuOpsiyonu: BoyOlcuOpsiyonu.values.firstWhere((e) => e.name == (d['boyOlcuOpsiyonu'] ?? 'kutuDahil')),
+    bolmeSayisi: d['bolmeSayisi'] ?? 1,
+    bolmeler: (d['bolmeler'] as List? ?? []).asMap().entries.map((e) => Bolme.fromMap(e.value as Map<String, dynamic>, e.key + 1)).toList(),
+    ilaveBoyMm: d['ilaveBoyMm'] ?? 0,
+    siparisNotu: d['siparisNotu'] ?? '',
+    teknikNot: d['teknikNot'] ?? '',
+    uretimNotu: d['uretimNotu'] ?? '',
+    urunKitiSecimi: d['urunKitiSecimi'] ?? 'standart',
+    karMarji: d['karMarji'] != null ? _parseDouble(d['karMarji']) : null,
+    iskonto: d['iskonto'] != null ? _parseDouble(d['iskonto']) : null,
+    transitSatis: d['transitSatis'] ?? false,
+    siraNo: d['siraNo'] ?? 0,
   );
 
   Map<String, dynamic> toMap() => {
-  'id': id,
-  'renk': renk,
-  'ozelRenk': ozelRenk,
-  'panjurTipi': panjurTipi.name,
-  'kutuTipi': kutuTipi?.name,
-  'kutuOlcusu': kutuOlcusu,
-  'lamelTipi': lamelTipi.name,
-  'lamelSinirKaldir': lamelSinirKaldir,
-  'motorMarkasi': motorMarkasi,
-  'motorTipi': motorTipi,
-  'enOlcuOpsiyonu': enOlcuOpsiyonu.name,
-  'boyOlcuOpsiyonu': boyOlcuOpsiyonu.name,
-  'bolmeSayisi': bolmeSayisi,
-  'bolmeler': bolmeler.map((b) => b.toMap()).toList(),
-  'ilaveBoyMm': ilaveBoyMm,
-  'siparisNotu': siparisNotu,
-  'teknikNot': teknikNot,
-  'uretimNotu': uretimNotu,
-  'urunKitiSecimi': urunKitiSecimi,
-  'hesaplananUrunler': hesaplananUrunler.map((h) => h.toMap()).toList(),
-  'karMarji': karMarji,
-  'iskonto': iskonto,
-  'transitSatis': transitSatis,
-  'siraNo': siraNo,
+    'id': id,
+    'renk': renk,
+    'ozelRenk': ozelRenk,
+    'panjurTipi': panjurTipi.name,
+    'kutuTipi': kutuTipi?.name,
+    'kutuOlcusu': kutuOlcusu,
+    'lamelTipi': lamelTipi.name,
+    'lamelSinirKaldir': lamelSinirKaldir,
+    'motorMarkasi': motorMarkasi,
+    'motorTipi': motorTipi,
+    'enOlcuOpsiyonu': enOlcuOpsiyonu.name,
+    'boyOlcuOpsiyonu': boyOlcuOpsiyonu.name,
+    'bolmeSayisi': bolmeSayisi,
+    'bolmeler': bolmeler.map((b) => b.toMap()).toList(),
+    'ilaveBoyMm': ilaveBoyMm,
+    'siparisNotu': siparisNotu,
+    'teknikNot': teknikNot,
+    'uretimNotu': uretimNotu,
+    'urunKitiSecimi': urunKitiSecimi,
+    'hesaplananUrunler': hesaplananUrunler.map((h) => h.toMap()).toList(),
+    'karMarji': karMarji,
+    'iskonto': iskonto,
+    'transitSatis': transitSatis,
+    'siraNo': siraNo,
   };
 }
 
 // ════════════════════════════════════════════════════════════
-// HESAPLANAN ÜRÜN (reçete patlatma sonucu)
+// HESAPLANAN ÜRÜN (BOM Sonucu)
 // ════════════════════════════════════════════════════════════
 class HesaplananUrun {
   final String stokKodu;
@@ -450,8 +442,8 @@ class HesaplananUrun {
   final double kdvliFiyat;
   final double kilogram;
   final double metraj;
-  final int? bolmeNo;       // Hangi bölmede hesaplandı
-  final bool ilaveMalzeme;  // Transit satış kalemi
+  final int? bolmeNo;
+  final bool ilaveMalzeme;
 
   const HesaplananUrun({
     required this.stokKodu,
@@ -492,17 +484,17 @@ class HesaplananUrun {
   factory HesaplananUrun.fromMap(Map<String, dynamic> d) => HesaplananUrun(
     stokKodu: d['stokKodu'] ?? '',
     stokAdi: d['stokAdi'] ?? '',
-    miktar: (d['miktar'] ?? 0).toDouble(),
+    miktar: _parseDouble(d['miktar']),
     birim: d['birim'] ?? 'Adet',
-    alisFiyati: (d['alisFiyati'] ?? 0).toDouble(),
-    maliyet: (d['maliyet'] ?? 0).toDouble(),
-    alisIskontosu: (d['alisIskontosu'] ?? 0).toDouble(),
-    satisFiyati: (d['satisFiyati'] ?? 0).toDouble(),
-    karMarji: (d['karMarji'] ?? 0).toDouble(),
-    kdvOrani: (d['kdvOrani'] ?? 20).toDouble(),
-    kdvliFiyat: (d['kdvliFiyat'] ?? 0).toDouble(),
-    kilogram: (d['kilogram'] ?? 0).toDouble(),
-    metraj: (d['metraj'] ?? 0).toDouble(),
+    alisFiyati: _parseDouble(d['alisFiyati']),
+    maliyet: _parseDouble(d['maliyet']),
+    alisIskontosu: _parseDouble(d['alisIskontosu']),
+    satisFiyati: _parseDouble(d['satisFiyati']),
+    karMarji: _parseDouble(d['karMarji']),
+    kdvOrani: _parseDouble(d['kdvOrani'] ?? 20),
+    kdvliFiyat: _parseDouble(d['kdvliFiyat']),
+    kilogram: _parseDouble(d['kilogram']),
+    metraj: _parseDouble(d['metraj']),
     bolmeNo: d['bolmeNo'],
     ilaveMalzeme: d['ilaveMalzeme'] ?? false,
   );
@@ -536,20 +528,10 @@ class Siparis {
     this.createdBy = '',
   });
 
-  double get toplamMaliyet =>
-      pozlar.fold(0, (s, p) =>
-      s + p.hesaplananUrunler.fold(0, (s2, u) => s2 + u.maliyet * u.miktar));
-
-  double get toplamSatisFiyati =>
-      pozlar.fold(0, (s, p) =>
-      s + p.hesaplananUrunler.fold(0, (s2, u) => s2 + u.satisFiyati * u.miktar));
-
-  double get toplamKdvliFiyat =>
-      toplamSatisFiyati * (1 - genelIskonto / 100);
-
-  double get toplamKilo =>
-      pozlar.fold(0, (s, p) =>
-      s + p.hesaplananUrunler.fold(0, (s2, u) => s2 + u.kilogram * u.miktar));
+  double get toplamMaliyet => pozlar.fold(0, (s, p) => s + p.hesaplananUrunler.fold(0, (s2, u) => s2 + u.maliyet * u.miktar));
+  double get toplamSatisFiyati => pozlar.fold(0, (s, p) => s + p.hesaplananUrunler.fold(0, (s2, u) => s2 + u.satisFiyati * u.miktar));
+  double get toplamKdvliFiyat => toplamSatisFiyati * (1 - genelIskonto / 100);
+  double get toplamKilo => pozlar.fold(0, (s, p) => s + p.hesaplananUrunler.fold(0, (s2, u) => s2 + u.kilogram * u.miktar));
 
   factory Siparis.fromFirestore(DocumentSnapshot doc) {
     final d = doc.data() as Map<String, dynamic>;
@@ -560,10 +542,8 @@ class Siparis {
       siparisReferansi: d['siparisReferansi'] ?? '',
       olusturmaTarihi: (d['olusturmaTarihi'] as Timestamp?)?.toDate() ?? DateTime.now(),
       durum: d['durum'] ?? 'taslak',
-      pozlar: (d['pozlar'] as List? ?? [])
-          .map((p) => SiparisPoz.fromMap(p as Map<String, dynamic>))
-          .toList(),
-      genelIskonto: (d['genelIskonto'] ?? 0).toDouble(),
+      pozlar: (d['pozlar'] as List? ?? []).map((p) => SiparisPoz.fromMap(p as Map<String, dynamic>)).toList(),
+      genelIskonto: _parseDouble(d['genelIskonto']),
       siparisNotu: d['siparisNotu'] ?? '',
       createdBy: d['createdBy'] ?? '',
     );
@@ -573,7 +553,8 @@ class Siparis {
     'siparisNo': siparisNo,
     'musteriAdi': musteriAdi,
     'siparisReferansi': siparisReferansi,
-    'olusturmaTarihi': Timestamp.fromDate(olusturmaTarihi),
+    // DİKKAT: Timestamp.fromDate YERİNE FieldValue.serverTimestamp() KULLANIYORUZ!
+    'olusturmaTarihi': FieldValue.serverTimestamp(),
     'durum': durum,
     'pozlar': pozlar.map((p) => p.toMap()).toList(),
     'genelIskonto': genelIskonto,
@@ -628,9 +609,6 @@ class RenkTanim {
   };
 }
 
-// ════════════════════════════════════════════════════════════
-// OTOMATİK İKAME MATRİSİ
-// ════════════════════════════════════════════════════════════
 class IkameKurali {
   final String id;
   final String urunGrubu;
@@ -661,9 +639,6 @@ class IkameKurali {
   }
 }
 
-// ════════════════════════════════════════════════════════════
-// KAPASİTE MATRİSİ
-// ════════════════════════════════════════════════════════════
 class KapasteMatris {
   final String id;
   final String kutuTipi;

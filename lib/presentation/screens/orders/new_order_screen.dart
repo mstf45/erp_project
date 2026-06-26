@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
@@ -16,205 +17,142 @@ class NewOrderScreen extends StatefulWidget {
 }
 
 class _NewOrderScreenState extends State<NewOrderScreen> {
-  final _musteriAdiController = TextEditingController();
-  final _referansController = TextEditingController();
+  final _customerNameController = TextEditingController();
+  final _referenceController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<StokProvider>().renklerDinle();
-      context.read<SiparisProvider>().sifirla();
+      context.read<SiparisProvider>().resetOrderData();
     });
   }
 
   @override
   void dispose() {
-    _musteriAdiController.dispose();
-    _referansController.dispose();
+    _customerNameController.dispose();
+    _referenceController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final siparisProv = context.watch<SiparisProvider>();
+    final orderProv = context.watch<SiparisProvider>();
 
-    return Scaffold(
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(AppSpacing.lg),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildHeaderCard(context, siparisProv),
-            const SizedBox(height: AppSpacing.lg),
+    return GestureDetector(
+      onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
+      child: Scaffold(
+        body: SingleChildScrollView(
+          padding: const EdgeInsets.all(AppSpacing.lg),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildHeaderCard(context, orderProv),
+              const SizedBox(height: AppSpacing.lg),
 
-            if (siparisProv.secilenRenk.isEmpty)
-              const EmptyState(
-                ikon: Icons.palette_outlined,
-                baslik: 'Siparişe Başlamak İçin Renk Seçin',
-                aciklama:
-                    'Tüm sisteme varsayılan olarak atanacak olan profil rengini yukarıdan belirlemelisiniz.',
-              )
-            else
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  SectionHeader(
-                    baslik: 'Sipariş Kalemleri (Pozlar)',
-                    aksiyon: Row(
-                      children: [
-                        if (siparisProv.pozlar.isNotEmpty)
-                          OutlinedButton.icon(
-                            onPressed: () {
-                              showDialog(
-                                context: context,
-                                builder: (_) => const TopluDegisiklikDialog(),
-                              );
-                            },
-                            icon: const Icon(Icons.auto_fix_high, size: 18),
-                            label: const Text('Toplu Değiştir'),
-                          ),
-                        const SizedBox(width: AppSpacing.sm),
-                        ElevatedButton.icon(
-                          onPressed: () => siparisProv.yeniPozEkle(),
-                          icon: const Icon(Icons.add, size: 18),
-                          label: const Text('Yeni Panjur Ekle'),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: AppSpacing.md),
-
-                  if (siparisProv.pozlar.isEmpty)
-                    const EmptyState(
-                      ikon: Icons.view_list_rounded,
-                      baslik: 'Henüz Panjur Eklenmedi',
-                      aciklama:
-                          'Yeni Panjur Ekle butonuna tıklayarak ilk pozisyonu oluşturun.',
-                    )
-                  else
-                    ListView.builder(
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      itemCount: siparisProv.pozlar.length,
-                      itemBuilder: (context, index) {
-                        return PozDetailCard(
-                          poz: siparisProv.pozlar[index],
-                          index: index,
-                        );
-                      },
-                    ),
-                ],
-              ),
-          ],
-        ),
-      ),
-      bottomNavigationBar: siparisProv.pozlar.isEmpty
-          ? null
-          : Container(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                border: const Border(top: BorderSide(color: AppColors.border)),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.05),
-                    blurRadius: 10,
-                    offset: const Offset(0, -5),
-                  ),
-                ],
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Toplam Sistem Maliyeti',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: AppColors.textMuted,
-                        ),
-                      ),
-                      Text(
-                        '₺${siparisProv.toplamMaliyet.toStringAsFixed(2)}',
-                        style: GoogleFonts.inter(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.textPrimary,
-                        ),
-                      ),
-                    ],
-                  ),
-                  // bottomNavigationBar içindeki ElevatedButton:
-                  ElevatedButton.icon(
-                    onPressed: siparisProv.yukleniyor
-                        ? null
-                        : () async {
-                            // 1. Firebase'e kaydetme işlemini tetikle
-                            final id = await siparisProv.siparisKaydet();
-
-                            if (context.mounted) {
-                              if (id != null) {
-                                // 2. Başarılıysa yeşil bildirim göster ve formu sıfırla
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text(
-                                      'Sipariş Başarıyla Kaydedildi! (ID: $id)',
-                                    ),
-                                    backgroundColor: AppColors.success,
-                                  ),
-                                );
-                                siparisProv.sifirla(); // Ekranı temizle
-                                context.read<NavigationProvider>().rotaDegistir(
-                                  AppRoutes.dashboard,
-                                );
-                              } else {
-                                // 3. Hata varsa kırmızı bildirim göster
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text(
-                                      siparisProv.hata ??
-                                          'Kayıt sırasında hata oluştu.',
-                                    ),
-                                    backgroundColor: AppColors.error,
-                                  ),
-                                );
-                              }
-                            }
-                          },
-                    style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 32,
-                        vertical: 16,
-                      ),
-                      backgroundColor: AppColors.success,
-                    ),
-                    icon: siparisProv.yukleniyor
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(
-                              color: Colors.white,
-                              strokeWidth: 2,
+              if (orderProv.secilenRenk.isEmpty)
+                const EmptyState(
+                  ikon: Icons.palette_outlined,
+                  baslik: 'Siparişe Başlamak İçin Renk Seçin',
+                  aciklama: 'Tüm sisteme varsayılan olarak atanacak olan profil rengini yukarıdan belirlemelisiniz.',
+                )
+              else
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SectionHeader(
+                      baslik: 'Sipariş Kalemleri (Pozlar)',
+                      aksiyon: Row(
+                        children: [
+                          if (orderProv.pozlar.isNotEmpty)
+                            OutlinedButton.icon(
+                              onPressed: () {
+                                showDialog(context: context, builder: (_) => const TopluDegisiklikDialog());
+                              },
+                              icon: const Icon(Icons.auto_fix_high, size: 18),
+                              label: const Text('Toplu Değiştir'),
                             ),
-                          )
-                        : const Icon(Icons.save_rounded),
-                    label: Text(
-                      siparisProv.yukleniyor
-                          ? 'KAYDEDİLİYOR...'
-                          : 'SİPARİŞİ KAYDET',
+                          const SizedBox(width: AppSpacing.sm),
+                          ElevatedButton.icon(
+                            onPressed: () => orderProv.addNewPosition(),
+                            icon: const Icon(Icons.add, size: 18),
+                            label: const Text('Yeni Panjur Ekle'),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                ],
-              ),
-            ),
+                    const SizedBox(height: AppSpacing.md),
+                    if (orderProv.pozlar.isEmpty)
+                      const EmptyState(
+                        ikon: Icons.view_list_rounded,
+                        baslik: 'Henüz Panjur Eklenmedi',
+                        aciklama: 'Yeni Panjur Ekle butonuna tıklayarak ilk pozisyonu oluşturun.',
+                      )
+                    else
+                      ListView.builder(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        itemCount: orderProv.pozlar.length,
+                        itemBuilder: (context, index) {
+                          return PozDetailCard(poz: orderProv.pozlar[index], index: index);
+                        },
+                      ),
+                  ],
+                ),
+            ],
+          ),
+        ),
+        bottomNavigationBar: orderProv.pozlar.isEmpty ? null : _buildBottomBar(context, orderProv),
+      ),
     );
   }
 
-  Widget _buildHeaderCard(BuildContext context, SiparisProvider siparisProv) {
+  Widget _buildBottomBar(BuildContext context, SiparisProvider orderProv) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: const Border(top: BorderSide(color: AppColors.border)),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, -5))],
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Toplam Sistem Maliyeti', style: TextStyle(fontSize: 12, color: AppColors.textMuted)),
+              Text('₺${orderProv.toplamMaliyet.toStringAsFixed(2)}', style: GoogleFonts.inter(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
+            ],
+          ),
+          ElevatedButton.icon(
+            // DİKKAT: ARTIK SADECE "KAYDEDILIYOR" DEĞİŞKENİNE BAKIYORUZ
+            onPressed: orderProv.kaydediliyor ? null : () async {
+              final id = await orderProv.saveOrder();
+              if (context.mounted) {
+                if (id != null) {
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Sipariş Başarıyla Kaydedildi! (ID: $id)'), backgroundColor: AppColors.success));
+                  orderProv.resetOrderData();
+                  context.read<NavigationProvider>().rotaDegistir(AppRoutes.dashboard);
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(orderProv.hata ?? 'Kayıt sırasında hata oluştu.'), backgroundColor: AppColors.error));
+                }
+              }
+            },
+            style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16), backgroundColor: AppColors.success),
+            icon: orderProv.kaydediliyor
+                ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                : const Icon(Icons.save_rounded),
+            label: Text(orderProv.kaydediliyor ? 'KAYDEDİLİYOR...' : 'SİPARİŞİ KAYDET'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHeaderCard(BuildContext context, SiparisProvider orderProv) {
     final stokProv = context.watch<StokProvider>();
     return Card(
       child: Padding(
@@ -232,11 +170,9 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
                     etiket: 'Müşteri Adı',
                     zorunlu: true,
                     child: TextField(
-                      controller: _musteriAdiController,
-                      onChanged: siparisProv.musteriAdiGuncelle,
-                      decoration: const InputDecoration(
-                        hintText: 'Müşteri veya Firma Adı',
-                      ),
+                      controller: _customerNameController,
+                      onChanged: orderProv.updateCustomerName,
+                      decoration: const InputDecoration(hintText: 'Müşteri veya Firma Adı'),
                     ),
                   ),
                 ),
@@ -245,38 +181,23 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
                   child: FormFieldWrap(
                     etiket: 'Sipariş Referansı',
                     child: TextField(
-                      controller: _referansController,
-                      onChanged: siparisProv.referansGuncelle,
-                      decoration: const InputDecoration(
-                        hintText: 'İsteğe bağlı referans',
-                      ),
+                      controller: _referenceController,
+                      onChanged: orderProv.updateOrderReference,
+                      decoration: const InputDecoration(hintText: 'İsteğe bağlı referans'),
                     ),
                   ),
                 ),
                 const SizedBox(width: AppSpacing.md),
-                // _buildHeaderCard içindeki Renk Seçimi kısmı:
                 Expanded(
                   child: FormFieldWrap(
                     etiket: 'Global Renk Seçimi',
                     zorunlu: true,
                     child: DropdownButtonFormField<String>(
-                      value: siparisProv.secilenRenk.isEmpty
-                          ? null
-                          : siparisProv.secilenRenk,
-                      isExpanded: true, // Ekrandan taşmasını engeller!
-                      decoration: const InputDecoration(
-                        hintText: 'Renk Seçiniz',
-                      ),
-                      items: [
-                        ...stokProv.renkler.map(
-                          (r) => DropdownMenuItem(
-                            value: r.renkKodu,
-                            child: Text('${r.renkAdi} (${r.renkKodu})'),
-                          ),
-                        ),
-                      ],
-                      onChanged: (val) =>
-                          val != null ? siparisProv.renkSec(val) : null,
+                      value: orderProv.secilenRenk.isEmpty ? null : orderProv.secilenRenk,
+                      isExpanded: true,
+                      decoration: const InputDecoration(hintText: 'Renk Seçiniz'),
+                      items: stokProv.renkler.map((r) => DropdownMenuItem(value: r.renkKodu, child: Text('${r.renkAdi} (${r.renkKodu})'))).toList(),
+                      onChanged: (val) => val != null ? orderProv.selectGlobalColor(val) : null,
                     ),
                   ),
                 ),
@@ -298,7 +219,7 @@ class PozDetailCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final siparisProv = context.read<SiparisProvider>();
+    final orderProv = context.read<SiparisProvider>();
     return Card(
       margin: const EdgeInsets.only(bottom: AppSpacing.lg),
       child: Padding(
@@ -310,7 +231,7 @@ class PozDetailCard extends StatelessWidget {
               baslik: 'Poz ${index + 1}',
               alt: 'ID: ${poz.id.substring(0, 8)}...',
               aksiyon: IconButton(
-                onPressed: () => siparisProv.pozSil(poz.id),
+                onPressed: () => orderProv.removePosition(poz.id),
                 icon: const Icon(Icons.delete_outline, color: AppColors.error),
               ),
             ),
@@ -323,17 +244,12 @@ class PozDetailCard extends StatelessWidget {
                   child: FormFieldWrap(
                     etiket: 'Panjur Tipi',
                     zorunlu: true,
-                    child: DropdownMenu<PanjurTipi>(
-                      initialSelection: poz.panjurTipi,
-                      width: double.infinity,
-                      onSelected: (val) => val != null
-                          ? siparisProv.pozPanjurTipiGuncelle(poz.id, val)
-                          : null,
-                      dropdownMenuEntries: PanjurTipi.values
-                          .map(
-                            (t) => DropdownMenuEntry(value: t, label: t.label),
-                          )
-                          .toList(),
+                    child: DropdownButtonFormField<PanjurTipi>(
+                      value: poz.panjurTipi,
+                      isExpanded: true,
+                      decoration: const InputDecoration(hintText: 'Tip Seçiniz'),
+                      items: PanjurTipi.values.map((t) => DropdownMenuItem(value: t, child: Text(t.label))).toList(),
+                      onChanged: (val) => val != null ? orderProv.updatePositionType(poz.id, val) : null,
                     ),
                   ),
                 ),
@@ -341,57 +257,37 @@ class PozDetailCard extends StatelessWidget {
                 Expanded(
                   child: poz.panjurTipi.kutuAktif
                       ? FormFieldWrap(
-                          etiket: 'Kutu Tipi',
-                          zorunlu: true,
-                          child: DropdownMenu<KutuTipi>(
-                            initialSelection: poz.kutuTipi,
-                            width: double.infinity,
-                            onSelected: (val) =>
-                                siparisProv.pozKutuTipiGuncelle(poz.id, val),
-                            dropdownMenuEntries: KutuTipi.values
-                                .map(
-                                  (t) => DropdownMenuEntry(
-                                    value: t,
-                                    label: t.label,
-                                  ),
-                                )
-                                .toList(),
-                          ),
-                        )
-                      : _buildLockedField(
-                          'Kutu Tipi',
-                          'Pano tipinde seçilemez',
-                        ),
+                    etiket: 'Kutu Tipi',
+                    zorunlu: true,
+                    child: DropdownButtonFormField<KutuTipi>(
+                      value: poz.kutuTipi,
+                      isExpanded: true,
+                      decoration: const InputDecoration(hintText: 'Kutu Seçiniz'),
+                      items: KutuTipi.values.map((t) => DropdownMenuItem(value: t, child: Text(t.label))).toList(),
+                      onChanged: (val) => orderProv.updateBoxType(poz.id, val),
+                    ),
+                  )
+                      : _buildLockedField('Kutu Tipi', 'Pano tipinde seçilemez'),
                 ),
                 const SizedBox(width: AppSpacing.md),
                 Expanded(
-                  child: poz.panjurTipi.motorAktif
-                      ? FormFieldWrap(
-                          etiket: 'Motor Türü',
-                          zorunlu: true,
-                          child: DropdownMenu<String>(
-                            initialSelection: poz.motorMarkasi.isNotEmpty
-                                ? poz.motorMarkasi
-                                : null,
-                            width: double.infinity,
-                            dropdownMenuEntries: const [
-                              DropdownMenuEntry(
-                                value: 'Standart',
-                                label: 'Standart Motor',
-                              ),
-                            ],
-                          ),
-                        )
-                      : _buildLockedField(
-                          'Motor Türü',
-                          'Bu tipte kullanılamaz',
-                        ),
+                  child: FormFieldWrap(
+                    etiket: 'Lamel Tipi',
+                    zorunlu: true,
+                    child: DropdownButtonFormField<LamelTipi>(
+                      value: poz.lamelTipi,
+                      isExpanded: true,
+                      decoration: const InputDecoration(hintText: 'Lamel Seçiniz'),
+                      items: LamelTipi.values.map((t) => DropdownMenuItem(value: t, child: Text(t.label))).toList(),
+                      onChanged: (val) => val != null ? orderProv.updateLamelType(poz.id, val) : null,
+                    ),
+                  ),
                 ),
               ],
             ),
             const SizedBox(height: AppSpacing.lg),
-            _buildOlcuVeBolmeAlanlari(context, siparisProv),
-            _buildHesaplamaVeSonucAlani(context, siparisProv),
+            _buildOlcuVeBolmeAlanlari(context, orderProv),
+            _buildHesaplamaVeSonucAlani(context, orderProv),
           ],
         ),
       ),
@@ -403,38 +299,19 @@ class PozDetailCard extends StatelessWidget {
       etiket: etiket,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        decoration: BoxDecoration(
-          color: AppColors.surfaceVariant,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: AppColors.border),
-        ),
+        decoration: BoxDecoration(color: AppColors.surfaceVariant, borderRadius: BorderRadius.circular(8), border: Border.all(color: AppColors.border)),
         child: Row(
           children: [
-            const Icon(
-              Icons.lock_outline,
-              size: 16,
-              color: AppColors.textMuted,
-            ),
+            const Icon(Icons.lock_outline, size: 16, color: AppColors.textMuted),
             const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                aciklama,
-                style: const TextStyle(
-                  fontSize: 12,
-                  color: AppColors.textMuted,
-                ),
-              ),
-            ),
+            Expanded(child: Text(aciklama, style: const TextStyle(fontSize: 12, color: AppColors.textMuted))),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildOlcuVeBolmeAlanlari(
-    BuildContext context,
-    SiparisProvider siparisProv,
-  ) {
+  Widget _buildOlcuVeBolmeAlanlari(BuildContext context, SiparisProvider orderProv) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -447,36 +324,13 @@ class PozDetailCard extends StatelessWidget {
                 etiket: 'Bölme Sayısı',
                 child: Container(
                   height: 48,
-                  decoration: BoxDecoration(
-                    border: Border.all(color: AppColors.border),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
+                  decoration: BoxDecoration(border: Border.all(color: AppColors.border), borderRadius: BorderRadius.circular(8)),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      IconButton(
-                        icon: const Icon(Icons.remove, size: 20),
-                        onPressed: poz.bolmeSayisi > 1
-                            ? () => siparisProv.pozBolmeSayisiGuncelle(
-                                poz.id,
-                                poz.bolmeSayisi - 1,
-                              )
-                            : null,
-                      ),
-                      Text(
-                        '${poz.bolmeSayisi}',
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
-                        ),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.add, size: 20),
-                        onPressed: () => siparisProv.pozBolmeSayisiGuncelle(
-                          poz.id,
-                          poz.bolmeSayisi + 1,
-                        ),
-                      ),
+                      IconButton(icon: const Icon(Icons.remove, size: 20), onPressed: poz.bolmeSayisi > 1 ? () => orderProv.updateSegmentCount(poz.id, poz.bolmeSayisi - 1) : null),
+                      Text('${poz.bolmeSayisi}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                      IconButton(icon: const Icon(Icons.add, size: 20), onPressed: () => orderProv.updateSegmentCount(poz.id, poz.bolmeSayisi + 1)),
                     ],
                   ),
                 ),
@@ -486,11 +340,7 @@ class PozDetailCard extends StatelessWidget {
         ),
         const SizedBox(height: AppSpacing.md),
         Container(
-          decoration: BoxDecoration(
-            color: AppColors.bgLight,
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: AppColors.border),
-          ),
+          decoration: BoxDecoration(color: AppColors.bgLight, borderRadius: BorderRadius.circular(8), border: Border.all(color: AppColors.border)),
           child: Column(
             children: poz.bolmeler.map((bolme) {
               return Padding(
@@ -498,45 +348,30 @@ class PozDetailCard extends StatelessWidget {
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    CircleAvatar(
-                      radius: 20,
-                      backgroundColor: AppColors.primary,
-                      child: Text(
-                        '${bolme.bolmeNo}',
-                        style: const TextStyle(color: Colors.white),
-                      ),
-                    ),
+                    CircleAvatar(radius: 20, backgroundColor: AppColors.primary, child: Text('${bolme.bolmeNo}', style: const TextStyle(color: Colors.white))),
                     const SizedBox(width: AppSpacing.md),
                     Expanded(
                       child: FormFieldWrap(
-                        etiket: 'En (mm)',
+                        etiket: 'Width (En - mm)',
                         child: TextFormField(
                           initialValue: bolme.enMm == 0 ? '' : '${bolme.enMm}',
                           keyboardType: TextInputType.number,
-                          onChanged: (val) => siparisProv.bolmeOlcuGuncelle(
-                            poz.id,
-                            bolme.bolmeNo,
-                            int.tryParse(val) ?? 0,
-                            bolme.boyMm,
-                          ),
+                          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                          decoration: const InputDecoration(hintText: 'Örn: 1500'),
+                          onChanged: (val) => orderProv.updateSegmentDimensions(poz.id, bolme.bolmeNo, int.tryParse(val) ?? 0, bolme.boyMm),
                         ),
                       ),
                     ),
                     const SizedBox(width: AppSpacing.md),
                     Expanded(
                       child: FormFieldWrap(
-                        etiket: 'Boy (mm)',
+                        etiket: 'Height (Boy - mm)',
                         child: TextFormField(
-                          initialValue: bolme.boyMm == 0
-                              ? ''
-                              : '${bolme.boyMm}',
+                          initialValue: bolme.boyMm == 0 ? '' : '${bolme.boyMm}',
                           keyboardType: TextInputType.number,
-                          onChanged: (val) => siparisProv.bolmeOlcuGuncelle(
-                            poz.id,
-                            bolme.bolmeNo,
-                            bolme.enMm,
-                            int.tryParse(val) ?? 0,
-                          ),
+                          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                          decoration: const InputDecoration(hintText: 'Örn: 2000'),
+                          onChanged: (val) => orderProv.updateSegmentDimensions(poz.id, bolme.bolmeNo, bolme.enMm, int.tryParse(val) ?? 0),
                         ),
                       ),
                     ),
@@ -550,10 +385,7 @@ class PozDetailCard extends StatelessWidget {
     );
   }
 
-  Widget _buildHesaplamaVeSonucAlani(
-    BuildContext context,
-    SiparisProvider siparisProv,
-  ) {
+  Widget _buildHesaplamaVeSonucAlani(BuildContext context, SiparisProvider orderProv) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -561,48 +393,26 @@ class PozDetailCard extends StatelessWidget {
         SizedBox(
           width: double.infinity,
           child: ElevatedButton.icon(
-            // Provider yükleniyorsa butonu pasif (null) yap
-            onPressed: siparisProv.yukleniyor
+            // DİKKAT: ARTIK SADECE "HESAPLANIYOR" DEĞİŞKENİNE BAKIYORUZ
+            onPressed: orderProv.hesaplaniyor
                 ? null
                 : () async {
-                    await siparisProv.hesaplaBomlariniPatlaAt(poz.id);
-                    if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Reçete başarıyla hesaplandı!'),
-                          backgroundColor: AppColors.success,
-                          duration: Duration(seconds: 2),
-                        ),
-                      );
-                    }
-                  },
-            // Yükleniyorsa dönen ikon (spinner), yoksa normal ikon göster
-            icon: siparisProv.yukleniyor
-                ? const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(
-                      color: Colors.white,
-                      strokeWidth: 2,
-                    ),
-                  )
+              await orderProv.calculateBillOfMaterials(poz.id);
+              if (context.mounted && orderProv.hata == null) {
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Reçete başarıyla hesaplandı!'), backgroundColor: AppColors.success));
+              }
+            },
+            icon: orderProv.hesaplaniyor
+                ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
                 : const Icon(Icons.precision_manufacturing_outlined),
-            label: Text(
-              siparisProv.yukleniyor
-                  ? 'HESAPLANIYOR...'
-                  : 'REÇETEYİ PATLAT VE HESAPLA',
-            ),
+            label: Text(orderProv.hesaplaniyor ? 'HESAPLANIYOR...' : 'REÇETEYİ PATLAT VE HESAPLA'),
           ),
         ),
         if (poz.hesaplananUrunler.isNotEmpty) ...[
           const SizedBox(height: AppSpacing.md),
           Container(
             width: double.infinity,
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: AppColors.border),
-            ),
+            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(8), border: Border.all(color: AppColors.border)),
             child: SingleChildScrollView(
               scrollDirection: Axis.horizontal,
               child: DataTable(
@@ -612,18 +422,11 @@ class PozDetailCard extends StatelessWidget {
                   DataColumn(label: Text('Miktar')),
                 ],
                 rows: poz.hesaplananUrunler.map((u) {
-                  return DataRow(
-                    cells: [
-                      DataCell(
-                        Text(
-                          u.stokKodu,
-                          style: const TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                      ),
-                      DataCell(Text(u.stokAdi)),
-                      DataCell(Text('${u.miktar} ${u.birim}')),
-                    ],
-                  );
+                  return DataRow(cells: [
+                    DataCell(Text(u.stokKodu, style: const TextStyle(fontWeight: FontWeight.bold))),
+                    DataCell(Text(u.stokAdi)),
+                    DataCell(Text('${u.miktar} ${u.birim}')),
+                  ]);
                 }).toList(),
               ),
             ),
@@ -634,26 +437,71 @@ class PozDetailCard extends StatelessWidget {
   }
 }
 
-// ─── TOPLU DEĞİŞİKLİK DIALOG ───
-class TopluDegisiklikDialog extends StatelessWidget {
+class TopluDegisiklikDialog extends StatefulWidget {
   const TopluDegisiklikDialog({super.key});
 
   @override
+  State<TopluDegisiklikDialog> createState() => _TopluDegisiklikDialogState();
+}
+
+class _TopluDegisiklikDialogState extends State<TopluDegisiklikDialog> {
+  String? _selectedColor;
+  PanjurTipi? _selectedPanjurTipi;
+  KutuTipi? _selectedKutuTipi;
+  LamelTipi? _selectedLamelTipi;
+
+  @override
   Widget build(BuildContext context) {
-    final siparisProv = context.read<SiparisProvider>();
+    final orderProv = context.read<SiparisProvider>();
+    final stokProv = context.read<StokProvider>();
+
     return AlertDialog(
-      title: const Text('Toplu Özellik Değiştir'),
-      content: const Text(
-        'Burada toplu seçim işlemleri yapılacak (UI hazır, bağlanacak).',
+      title: const Text('Toplu Özellik Değiştir', style: TextStyle(fontWeight: FontWeight.bold)),
+      content: SizedBox(
+        width: 400,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('Sadece değiştirmek istediğiniz özellikleri seçin.', style: TextStyle(fontSize: 12, color: AppColors.textMuted)),
+              const SizedBox(height: AppSpacing.lg),
+              FormFieldWrap(
+                etiket: 'Tüm Renkleri Değiştir',
+                child: DropdownButtonFormField<String>(
+                  value: _selectedColor,
+                  isExpanded: true,
+                  decoration: const InputDecoration(hintText: 'Değişiklik Yok'),
+                  items: [
+                    const DropdownMenuItem(value: '', child: Text('Değişiklik Yok')),
+                    ...stokProv.renkler.map((r) => DropdownMenuItem(value: r.renkKodu, child: Text(r.renkAdi))),
+                  ],
+                  onChanged: (v) => setState(() => _selectedColor = v?.isEmpty ?? true ? null : v),
+                ),
+              ),
+              const SizedBox(height: AppSpacing.md),
+              FormFieldWrap(
+                etiket: 'Tüm Panjur Tiplerini Değiştir',
+                child: DropdownButtonFormField<PanjurTipi>(
+                  value: _selectedPanjurTipi,
+                  isExpanded: true,
+                  decoration: const InputDecoration(hintText: 'Değişiklik Yok'),
+                  items: PanjurTipi.values.map((t) => DropdownMenuItem(value: t, child: Text(t.label))).toList(),
+                  onChanged: (v) => setState(() => _selectedPanjurTipi = v),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
       actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('İptal'),
-        ),
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('İptal', style: TextStyle(color: AppColors.textMuted))),
         ElevatedButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Uygula'),
+          onPressed: () {
+            orderProv.batchUpdateProperties(color: _selectedColor, panjurType: _selectedPanjurTipi, boxType: _selectedKutuTipi, lamelType: _selectedLamelTipi);
+            Navigator.pop(context);
+            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Tüm pozlara seçilen özellikler başarıyla uygulandı!'), backgroundColor: AppColors.success));
+          },
+          child: const Text('Tümüne Uygula'),
         ),
       ],
     );

@@ -92,11 +92,11 @@ class _TopluDegisiklikDialogState extends State<TopluDegisiklikDialog> {
         ElevatedButton(
           onPressed: () {
             // Provider'daki fonksiyonu çağırıp işlemi uyguluyoruz
-            siparisProv.topluOzellikDegistir(
-              renk: _secilenRenk,
-              panjurTipi: _secilenPanjurTipi,
-              kutuTipi: _secilenKutuTipi,
-              lamelTipi: _secilenLamelTipi,
+            siparisProv.batchUpdateProperties(
+              color: _secilenRenk,
+              panjurType: _secilenPanjurTipi,
+              boxType: _secilenKutuTipi,
+              lamelType: _secilenLamelTipi,
             );
             Navigator.pop(context);
 

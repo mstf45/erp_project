@@ -175,7 +175,7 @@ class SidebarWidget extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            context.watch<AuthProvider>().kullaniciEmail,
+                            context.watch<AuthProvider>().userEmail,
                             style: GoogleFonts.inter(
                               fontSize: 11,
                               color: Colors.white,
@@ -194,7 +194,7 @@ class SidebarWidget extends StatelessWidget {
                       ),
                     ),
                     IconButton(
-                      onPressed: () => context.read<AuthProvider>().cikisYap(),
+                      onPressed: () => context.read<AuthProvider>().logout(),
                       icon: const Icon(
                         Icons.logout_rounded,
                         size: 16,

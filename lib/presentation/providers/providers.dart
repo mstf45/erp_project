@@ -1,612 +1,282 @@
-// lib/presentation/providers/providers.dart
-import 'package:erp_frontend_project/core/utils/app_logger.dart';
+import 'package:erp_frontend_project/core/utils/calculation_engine.dart';
 import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
-import '../../core/utils/calculation_engine.dart';
+
+import '../../core/utils/app_logger.dart';
 import '../../data/models/models.dart';
 import '../../data/services/firebase_service.dart';
 import '../../core/constants/app_constants.dart';
 
-final _uuid = Uuid();
+final _uuid = const Uuid();
 
 // ════════════════════════════════════════════════════════════
 // AUTH PROVIDER
 // ════════════════════════════════════════════════════════════
 class AuthProvider extends ChangeNotifier {
   final FirebaseService _service;
-  bool _yukleniyor = false;
-  String? _hata;
+  bool _isLoading = false;
+  String? _errorMessage;
 
   AuthProvider(this._service);
+  bool get isLoading => _isLoading;
+  String? get errorMessage => _errorMessage;
+  bool get isAuthenticated => _service.mevcutKullanici != null;
+  String get userEmail => _service.mevcutKullanici?.email ?? '';
 
-  bool get yukleniyor => _yukleniyor;
-  String? get hata => _hata;
-  bool get girisYapti => _service.mevcutKullanici != null;
-  String get kullaniciEmail => _service.mevcutKullanici?.email ?? '';
-
-  Future<bool> girisYap(String email, String sifre) async {
-    _yukleniyor = true;
-    _hata = null;
-    notifyListeners();
+  Future<bool> login(String email, String password) async {
+    _isLoading = true; _errorMessage = null; notifyListeners();
     try {
-      await _service.girisYap(email, sifre);
-      _yukleniyor = false;
-      notifyListeners();
+      await _service.girisYap(email, password);
+      _isLoading = false; notifyListeners();
       return true;
     } catch (e) {
-      _hata = _hataMetni(e.toString());
-      _yukleniyor = false;
-      notifyListeners();
+      _errorMessage = "Giriş başarısız.";
+      _isLoading = false; notifyListeners();
       return false;
     }
   }
 
-  Future<void> cikisYap() => _service.cikisYap();
-
-  String _hataMetni(String e) {
-    if (e.contains('wrong-password')) return 'Şifre hatalı.';
-    if (e.contains('user-not-found')) return 'Kullanıcı bulunamadı.';
-    if (e.contains('too-many-requests'))
-      return 'Çok fazla deneme. Lütfen bekleyin.';
-    return 'Giriş başarısız. Bilgilerinizi kontrol edin.';
-  }
+  Future<void> logout() => _service.cikisYap();
 }
 
 // ════════════════════════════════════════════════════════════
-// SİPARİŞ PROVIDER - Ana iş mantığı
+// ORDER (SİPARİŞ) PROVIDER - Ana İş Mantığı
 // ════════════════════════════════════════════════════════════
 class SiparisProvider extends ChangeNotifier {
-
-
   final FirebaseService _service;
+  List<Siparis> _orders = [];
 
-  List<Siparis> _siparisler = [];
-  Siparis? _aktifSiparis;
-  bool _yukleniyor = false;
-  String? _hata;
+  // İŞTE SENİN YAKALADIĞIN HATANIN ÇÖZÜMÜ!
+  // Hesaplama ve Kaydetme işlemlerini AYIRDIK ki UI saçmalamasın.
+  bool _isCalculating = false;
+  bool _isSaving = false;
 
-  // Yeni sipariş oluşturma state'i
-  String _musteriAdi = '';
-  String _siparisReferansi = '';
-  String _secilenRenk = '';
-  String _ozelRenk = '';
-  List<SiparisPoz> _pozlar = [];
-  double _genelIskonto = 0;
+  String? _errorMessage;
+
+  String _customerName = '';
+  String _orderReference = '';
+  String _globalColorCode = '';
+  List<SiparisPoz> _positions = [];
+  double _globalDiscount = 0;
 
   SiparisProvider(this._service);
 
-  List<Siparis> get siparisler => _siparisler;
-  Siparis? get aktifSiparis => _aktifSiparis;
-  bool get yukleniyor => _yukleniyor;
-  String? get hata => _hata;
-  String get musteriAdi => _musteriAdi;
-  String get secilenRenk => _secilenRenk;
-  List<SiparisPoz> get pozlar => _pozlar;
-  double get genelIskonto => _genelIskonto;
+  List<Siparis> get siparisler => _orders;
+  bool get hesaplaniyor => _isCalculating; // Sadece hesaplarken döner
+  bool get kaydediliyor => _isSaving; // Sadece kaydederken döner
+  String? get hata => _errorMessage;
+  String get musteriAdi => _customerName;
+  String get secilenRenk => _globalColorCode;
+  List<SiparisPoz> get pozlar => _positions;
+  double get genelIskonto => _globalDiscount;
 
-  void ilaveMalzemeEkle(HesaplananUrun urun) {
-    final poz = _pozlar.first; // Şimdilik ilk poza veya genel bir listeye ekleyebiliriz
-    urun = HesaplananUrun(
-      stokKodu: urun.stokKodu,
-      stokAdi: urun.stokAdi,
-      miktar: urun.miktar,
-      ilaveMalzeme: true, // Transit işaretledik
-    );
-    poz.hesaplananUrunler.add(urun);
-    notifyListeners();
-  }
-
-  void siparislerDinle() {
-    _service.siparislerStream().listen((liste) {
-      _siparisler = liste;
-      notifyListeners();
+  void fetchOrdersStream() {
+    _service.siparislerStream().listen((list) {
+      _orders = list; notifyListeners();
     });
   }
 
-  // ─── Başlık bilgileri
-  void musteriAdiGuncelle(String v) {
-    _musteriAdi = v;
+  void updateCustomerName(String name) { _customerName = name; notifyListeners(); }
+  void updateOrderReference(String ref) { _orderReference = ref; notifyListeners(); }
+  void updateGlobalDiscount(double discount) { _globalDiscount = discount; notifyListeners(); }
+
+  void selectGlobalColor(String colorCode) {
+    _globalColorCode = colorCode;
+    for (var position in _positions) { position.renk = colorCode; }
     notifyListeners();
   }
 
-  void referansGuncelle(String v) {
-    _siparisReferansi = v;
+  void addNewPosition() {
+    _positions.add(SiparisPoz(id: _uuid.v4(), renk: _globalColorCode, siraNo: _positions.length));
     notifyListeners();
   }
 
-  void genelIskontoGuncelle(double v) {
-    _genelIskonto = v;
+  void removePosition(String positionId) {
+    _positions.removeWhere((p) => p.id == positionId);
+    for (int i = 0; i < _positions.length; i++) { _positions[i].siraNo = i; }
     notifyListeners();
   }
 
-  void renkSec(String renkKodu) {
-    _secilenRenk = renkKodu;
-    // Tüm pozlara varsayılan rengi ata
-    for (var poz in _pozlar) {
-      poz.renk = renkKodu;
+  SiparisPoz? _findPositionById(String id) {
+    try { return _positions.firstWhere((p) => p.id == id); } catch (_) { return null; }
+  }
+
+  void updatePositionType(String positionId, PanjurTipi type) {
+    final position = _findPositionById(positionId);
+    if (position == null) return;
+    position.panjurTipi = type;
+    if (type == PanjurTipi.manuel) { position.motorMarkasi = ''; position.motorTipi = ''; }
+    if (type == PanjurTipi.pano) { position.kutuTipi = null; }
+    notifyListeners();
+  }
+
+  void updateBoxType(String id, KutuTipi? type) { _findPositionById(id)?.kutuTipi = type; notifyListeners(); }
+  void updateLamelType(String id, LamelTipi type) { _findPositionById(id)?.lamelTipi = type; notifyListeners(); }
+
+  void updateSegmentCount(String positionId, int count) {
+    final position = _findPositionById(positionId);
+    if (position == null) return;
+    final oldCount = position.bolmeSayisi;
+    position.bolmeSayisi = count;
+    if (count > oldCount) {
+      for (int i = oldCount; i < count; i++) { position.bolmeler.add(Bolme(bolmeNo: i + 1)); }
+    } else if (count < oldCount) {
+      position.bolmeler = position.bolmeler.sublist(0, count);
     }
     notifyListeners();
   }
 
-  // ─── Poz yönetimi
-  void yeniPozEkle() {
-    final poz = SiparisPoz(
-      id: _uuid.v4(),
-      renk: _secilenRenk,
-      siraNo: _pozlar.length,
-    );
-    _pozlar.add(poz);
-    notifyListeners();
-  }
-
-  void pozSil(String pozId) {
-    _pozlar.removeWhere((p) => p.id == pozId);
-    // Sıra numaralarını yeniden ata
-    for (int i = 0; i < _pozlar.length; i++) {
-      _pozlar[i].siraNo = i;
-    }
-    notifyListeners();
-  }
-
-  void pozSiraDegistir(int eskiIndex, int yeniIndex) {
-    if (yeniIndex > eskiIndex) yeniIndex--;
-    final poz = _pozlar.removeAt(eskiIndex);
-    _pozlar.insert(yeniIndex, poz);
-    for (int i = 0; i < _pozlar.length; i++) {
-      _pozlar[i].siraNo = i;
-    }
-    notifyListeners();
-  }
-
-  SiparisPoz? pozBul(String pozId) {
-    try {
-      return _pozlar.firstWhere((p) => p.id == pozId);
-    } catch (_) {
-      return null;
-    }
-  }
-
-  // ─── Poz güncelleme
-  void pozPanjurTipiGuncelle(String pozId, PanjurTipi tip) {
-    final poz = pozBul(pozId);
-    if (poz == null) return;
-    poz.panjurTipi = tip;
-    // Global kilitler
-    if (tip == PanjurTipi.manuel) {
-      poz.motorMarkasi = '';
-      poz.motorTipi = '';
-    }
-    if (tip == PanjurTipi.pano) {
-      poz.kutuTipi = null;
-    }
-    notifyListeners();
-  }
-
-  void pozKutuTipiGuncelle(String pozId, KutuTipi? tip) {
-    final poz = pozBul(pozId);
-    if (poz == null) return;
-    poz.kutuTipi = tip;
-    notifyListeners();
-  }
-
-  void pozLamelTipiGuncelle(String pozId, LamelTipi tip) {
-    final poz = pozBul(pozId);
-    if (poz == null) return;
-    poz.lamelTipi = tip;
-    notifyListeners();
-  }
-
-  void pozBolmeSayisiGuncelle(String pozId, int sayi) {
-    final poz = pozBul(pozId);
-    if (poz == null) return;
-    final eskiSayi = poz.bolmeSayisi;
-    poz.bolmeSayisi = sayi;
-
-    if (sayi > eskiSayi) {
-      for (int i = eskiSayi; i < sayi; i++) {
-        poz.bolmeler.add(Bolme(bolmeNo: i + 1));
-      }
-    } else if (sayi < eskiSayi) {
-      poz.bolmeler = poz.bolmeler.sublist(0, sayi);
-    }
-    notifyListeners();
-  }
-
-  void bolmeOlcuGuncelle(String pozId, int bolmeNo, int en, int boy) {
-    final poz = pozBul(pozId);
-    if (poz == null) return;
-    final bolme = poz.bolmeler.firstWhere((b) => b.bolmeNo == bolmeNo);
-    bolme.enMm = en;
-    bolme.boyMm = boy;
-
-    // Otomatik lamel yükseltmesi
-    if (!poz.lamelSinirKaldir) {
-      poz.lamelTipi = CalculationEngine.lamelOtomatikYukselt(
-        mevcutLamel: poz.lamelTipi,
-        enMm: en,
-        boyMm: boy,
-        sinirKaldir: poz.lamelSinirKaldir,
+  void updateSegmentDimensions(String positionId, int segmentNo, int width, int height) {
+    final position = _findPositionById(positionId);
+    if (position == null) return;
+    final segment = position.bolmeler.firstWhere((b) => b.bolmeNo == segmentNo);
+    segment.enMm = width; segment.boyMm = height;
+    if (!position.lamelSinirKaldir) {
+      position.lamelTipi = CalculationEngine.lamelOtomatikYukselt(
+        mevcutLamel: position.lamelTipi, enMm: width, boyMm: height, sinirKaldir: position.lamelSinirKaldir,
       );
     }
     notifyListeners();
   }
 
-  void bolmePanjurTipiGuncelle(String pozId, int bolmeNo, PanjurTipi? tip) {
-    final poz = pozBul(pozId);
-    if (poz == null) return;
-    final bolme = poz.bolmeler.firstWhere((b) => b.bolmeNo == bolmeNo);
-    bolme.panjurTipi = tip;
-    notifyListeners();
-  }
-
-  // ─── Toplu özellik değiştir
-  void topluOzellikDegistir({
-    String? renk,
-    PanjurTipi? panjurTipi,
-    KutuTipi? kutuTipi,
-    LamelTipi? lamelTipi,
-    String? motorMarkasi,
-  }) {
-    for (final poz in _pozlar) {
-      if (renk != null) poz.renk = renk;
-      if (panjurTipi != null) poz.panjurTipi = panjurTipi;
-      if (kutuTipi != null) poz.kutuTipi = kutuTipi;
-      if (lamelTipi != null) poz.lamelTipi = lamelTipi;
-      if (motorMarkasi != null) poz.motorMarkasi = motorMarkasi;
+  void batchUpdateProperties({String? color, PanjurTipi? panjurType, KutuTipi? boxType, LamelTipi? lamelType}) {
+    for (final position in _positions) {
+      if (color != null) position.renk = color;
+      if (panjurType != null) position.panjurTipi = panjurType;
+      if (boxType != null) position.kutuTipi = boxType;
+      if (lamelType != null) position.lamelTipi = lamelType;
     }
     notifyListeners();
   }
 
-  // ─── Hesaplama
-  Future<void> hesaplaBomlariniPatlaAt(String pozId) async {
-    final poz = pozBul(pozId);
-    if (poz == null) {
-      AppLogger.error("Poz bulunamadı!", pozId, StackTrace.current);
-      return;
-    }
+  // ─── HESAPLAMA (BOM PATLATMA) ───
+  Future<void> calculateBillOfMaterials(String positionId) async {
+    final position = _findPositionById(positionId);
+    if (position == null) return;
 
-    _yukleniyor = true;
-    notifyListeners();
+    // Sadece Hesaplama animasyonunu tetikliyoruz
+    _isCalculating = true; _errorMessage = null; notifyListeners();
 
     try {
-      AppLogger.info("Hesaplama başladı: Poz ID $pozId");
-      final urunler = <HesaplananUrun>[];
+      final generatedItems = <HesaplananUrun>[];
+      for (final segment in position.bolmeler) {
+        final segmentType = segment.panjurTipi ?? position.panjurTipi;
+        final netHeight = CalculationEngine.netDikmeBoyuHesapla(girilenBoy: segment.boyMm, opsiyonu: position.boyOlcuOpsiyonu, kutuPay: 165);
+        segment.netDikmeBoy = netHeight;
+        final netWidth = CalculationEngine.netLamelEniHesapla(girilenEn: segment.enMm, opsiyonu: position.enOlcuOpsiyonu, sagDikmePay: 44, solDikmePay: 44, tekDikmePay: 44, dikmeDusumu: 44);
+        segment.netLamelEni = netWidth;
 
-      for (final bolme in poz.bolmeler) {
-        final bolmeTipi = bolme.panjurTipi ?? poz.panjurTipi;
-
-        // Net dikme boyu (kutu payı stoktan gelir, şimdilik 165 default)
-        final netBoy = CalculationEngine.netDikmeBoyuHesapla(
-          girilenBoy: bolme.boyMm,
-          opsiyonu: poz.boyOlcuOpsiyonu,
-          kutuPay: 165,
-        );
-        bolme.netDikmeBoy = netBoy;
-
-        // Net lamel eni (dikme düşümü stoktan gelir, şimdilik 44 default)
-        final netEn = CalculationEngine.netLamelEniHesapla(
-          girilenEn: bolme.enMm,
-          opsiyonu: poz.enOlcuOpsiyonu,
-          sagDikmePay: 44,
-          solDikmePay: 44,
-          tekDikmePay: 44,
-          dikmeDusumu: 44,
-        );
-        bolme.netLamelEni = netEn;
-
-        if (bolmeTipi == PanjurTipi.pano) {
-          // Pano hesaplama
-          final panoSonuc = CalculationEngine.panoPozHesapla(
-            toplamEnMm: bolme.enMm,
-            toplamBoyMm: bolme.boyMm,
-            lamelTipi: poz.lamelTipi,
-            netLamelEniMm: netEn,
-            dikmeTipi: bolme.yanDikme ?? 'Pano U',
-            dikmeDusumu: 44,
-          );
-          bolme.askiAdeti = panoSonuc['askiAdeti'];
+        if (segmentType == PanjurTipi.pano) {
+          final panoResult = CalculationEngine.panoPozHesapla(toplamEnMm: segment.enMm, toplamBoyMm: segment.boyMm, lamelTipi: position.lamelTipi, netLamelEniMm: netWidth, dikmeTipi: segment.yanDikme ?? 'Pano U', dikmeDusumu: 44);
+          segment.askiAdeti = panoResult['askiAdeti'];
         } else {
-          // Normal lamel hesaplama
-          final lamelAdeti = CalculationEngine.lamelAdetiHesapla(
-            netDikmeBoy: netBoy,
-            lamelTipi: poz.lamelTipi,
-          );
-          bolme.lamelAdeti = lamelAdeti;
+          final lamelCount = CalculationEngine.lamelAdetiHesapla(netDikmeBoy: netHeight, lamelTipi: position.lamelTipi);
+          segment.lamelAdeti = lamelCount;
+          final tapaCount = CalculationEngine.tapaAdetiHesapla(lamelAdeti: lamelCount, gozluLamel: segment.gozluLamelAdet > 0);
+          segment.tapaAdeti = tapaCount; segment.zimbaAdeti = tapaCount;
+          final askiCount = CalculationEngine.askiAdetiHesapla(netLamelEniMm: netWidth, lamelTipi: position.lamelTipi);
+          segment.askiAdeti = askiCount;
 
-          final tapaAdeti = CalculationEngine.tapaAdetiHesapla(
-            lamelAdeti: lamelAdeti,
-            gozluLamel: bolme.gozluLamelAdet > 0,
-          );
-          bolme.tapaAdeti = tapaAdeti;
-          bolme.zimbaAdeti = tapaAdeti;
+          final colorCode = position.ozelRenk.isNotEmpty ? position.ozelRenk : position.renk;
+          final lamelCode = CalculationEngine.stokKoduOlustur(kokKod: 'LAM.0${position.lamelTipi.mm}.', rengeGoreDegisir: true, renkKodu: colorCode);
+          final lamelStok = await _service.stokKoduIleGetir(lamelCode);
 
-          final askiAdeti = CalculationEngine.askiAdetiHesapla(
-            netLamelEniMm: netEn,
-            lamelTipi: poz.lamelTipi,
-          );
-          bolme.askiAdeti = askiAdeti;
-
-          // Lamel ürünü
-          final renkKodu = poz.ozelRenk.isNotEmpty ? poz.ozelRenk : poz.renk;
-          final lamelKodu = CalculationEngine.stokKoduOlustur(
-            // CalculationEngine
-            kokKod: 'LAM.0${poz.lamelTipi.mm}.',
-            rengeGoreDegisir: true,
-            renkKodu: renkKodu,
-          );
-
-          final lamelStok = await _service.stokKoduIleGetir(lamelKodu);
-
-          urunler.add(
-            HesaplananUrun(
-              stokKodu: lamelKodu,
-              stokAdi: '${poz.lamelTipi.label} Alüminyum Lamel ($renkKodu)',
-              miktar: lamelAdeti.toDouble(),
-              birim: 'Adet',
-              alisFiyati: lamelStok?.alisFiyati ?? 0,
-              bolmeNo: bolme.bolmeNo,
-            ),
-          );
-
-          // Tapa
-          urunler.add(
-            HesaplananUrun(
-              stokKodu: 'TAP.0${poz.lamelTipi.mm}.PLT.001',
-              stokAdi: '${poz.lamelTipi.label} Standart Tapa',
-              miktar: tapaAdeti.toDouble(),
-              birim: 'Adet',
-              bolmeNo: bolme.bolmeNo,
-            ),
-          );
-
-          // Askı
-          urunler.add(
-            HesaplananUrun(
-              stokKodu: poz.lamelTipi == LamelTipi.mm77
-                  ? 'ASK.077.CEL.001'
-                  : 'ASK.039.CEL.001',
-              stokAdi: '${poz.lamelTipi.label} Çelik Askı',
-              miktar: askiAdeti.toDouble(),
-              birim: 'Adet',
-              bolmeNo: bolme.bolmeNo,
-            ),
-          );
+          generatedItems.add(HesaplananUrun(stokKodu: lamelCode, stokAdi: '${position.lamelTipi.label} Alüminyum Lamel ($colorCode)', miktar: lamelCount.toDouble(), birim: 'Adet', alisFiyati: lamelStok?.alisFiyati ?? 0, bolmeNo: segment.bolmeNo));
+          generatedItems.add(HesaplananUrun(stokKodu: 'TAP.0${position.lamelTipi.mm}.PLT.001', stokAdi: '${position.lamelTipi.label} Standart Tapa', miktar: tapaCount.toDouble(), birim: 'Adet', bolmeNo: segment.bolmeNo));
+          generatedItems.add(HesaplananUrun(stokKodu: position.lamelTipi == LamelTipi.mm77 ? 'ASK.077.CEL.001' : 'ASK.039.CEL.001', stokAdi: '${position.lamelTipi.label} Çelik Askı', miktar: askiCount.toDouble(), birim: 'Adet', bolmeNo: segment.bolmeNo));
         }
 
-        // Fitil
-        if (poz.kutuTipi != null && bolmeTipi != PanjurTipi.pano) {
-          final fitilMetraj = CalculationEngine.fitilMetrajiHesapla(
-            dikmeBoyu: netBoy,
-            kutuTipi: poz.kutuTipi!,
-            ortaDikmeVar: poz.bolmeSayisi > 1,
-          );
-          urunler.add(
-            HesaplananUrun(
-              stokKodu: 'FTL.KIL.001',
-              stokAdi: 'Kıl Fitil',
-              miktar: fitilMetraj,
-              birim: 'Metre',
-              bolmeNo: bolme.bolmeNo,
-            ),
-          );
+        if (position.kutuTipi != null && segmentType != PanjurTipi.pano) {
+          final fitilLength = CalculationEngine.fitilMetrajiHesapla(dikmeBoyu: netHeight, kutuTipi: position.kutuTipi!, ortaDikmeVar: position.bolmeSayisi > 1);
+          generatedItems.add(HesaplananUrun(stokKodu: 'FTL.KIL.001', stokAdi: 'Kıl Fitil', miktar: fitilLength, birim: 'Metre', bolmeNo: segment.bolmeNo));
         }
       }
 
-      // Kutu kiti
-      if (poz.kutuTipi != null && poz.panjurTipi != PanjurTipi.pano) {
-        final kutuUrunler = CalculationEngine.kutuKitiHesapla(
-          kutuTipi: poz.kutuTipi!,
-          bolmeSayisi: poz.bolmeSayisi,
-          kutuOlcusu: poz.kutuOlcusu,
-        );
-        for (final u in kutuUrunler) {
-          urunler.add(
-            HesaplananUrun(
-              stokKodu: u['kod'],
-              stokAdi: u['ad'],
-              miktar: (u['adet'] as int).toDouble(),
-            ),
-          );
-        }
+      if (position.kutuTipi != null && position.panjurTipi != PanjurTipi.pano) {
+        final boxItems = CalculationEngine.kutuKitiHesapla(kutuTipi: position.kutuTipi!, bolmeSayisi: position.bolmeSayisi, kutuOlcusu: position.kutuOlcusu);
+        for (final item in boxItems) { generatedItems.add(HesaplananUrun(stokKodu: item['kod'], stokAdi: item['ad'], miktar: (item['adet'] as int).toDouble())); }
       }
 
-      // Makaslı ek donanım
-      if (poz.panjurTipi == PanjurTipi.makasli) {
-        final toplamEn = poz.bolmeler.fold(0, (s, b) => s + b.enMm);
-        final makasUrunler = CalculationEngine.makasEkDonanim(
-          toplamEnMm: toplamEn,
-        );
-        for (final u in makasUrunler) {
-          urunler.add(
-            HesaplananUrun(
-              stokKodu: u['kod'],
-              stokAdi: u['ad'],
-              miktar: (u['adet'] as int).toDouble(),
-            ),
-          );
-        }
-      }
-
-      poz.hesaplananUrunler = urunler;
-      AppLogger.info("Hesaplama tamamlandı. ${poz.hesaplananUrunler.length} ürün bulundu.");
+      position.hesaplananUrunler = generatedItems;
     } catch (e, stack) {
-      AppLogger.error("Hesaplama sırasında hata oluştu!", e, stack);
-      _hata = "Hesaplama hatası: ${e.toString()}";
+      _errorMessage = "Calculation Error: ${e.toString()}";
     } finally {
-      _yukleniyor = false;
+      // Sadece hesaplamayı kapat
+      _isCalculating = false;
       notifyListeners();
     }
-
-    _yukleniyor = false;
-    notifyListeners();
   }
 
-  // ─── Kaydetme
-  Future<String?> siparisKaydet() async {
-    if (_musteriAdi.isEmpty) {
-      _hata = 'Müşteri adı zorunludur.';
-      debugPrint(_hata);
-      notifyListeners();
-      return null;
-    }
-    _yukleniyor = true;
-    notifyListeners();
+  // ─── KAYDETME VE SIFIRLAMA ───
+  Future<String?> saveOrder() async {
+    if (_customerName.trim().isEmpty) { _errorMessage = 'Müşteri adı zorunludur.'; notifyListeners(); return null; }
+
+    // Sadece Kaydetme animasyonunu tetikliyoruz
+    _isSaving = true; notifyListeners();
 
     try {
-      final siparis = Siparis(
-        id: '',
-        siparisNo: '',
-        musteriAdi: _musteriAdi,
-        siparisReferansi: _siparisReferansi,
-        olusturmaTarihi: DateTime.now(),
-        pozlar: _pozlar,
-        genelIskonto: _genelIskonto,
+      final newOrder = Siparis(
+        id: '', siparisNo: '', musteriAdi: _customerName, siparisReferansi: _orderReference,
+        olusturmaTarihi: DateTime.now(), pozlar: _positions, genelIskonto: _globalDiscount,
       );
-      final id = await _service.siparisOlustur(siparis);
-      _yukleniyor = false;
-      notifyListeners();
+      final id = await _service.siparisOlustur(newOrder);
+      _isSaving = false; notifyListeners();
       return id;
-    } catch (e) {
-      _hata = e.toString();
-      _yukleniyor = false;
-      notifyListeners();
+    } catch (e, stack) {
+      _errorMessage = e.toString();
+      _isSaving = false; notifyListeners();
       return null;
     }
   }
 
-  void sifirla() {
-    _musteriAdi = '';
-    _siparisReferansi = '';
-    _secilenRenk = '';
-    _ozelRenk = '';
-    _pozlar = [];
-    _genelIskonto = 0;
-    _hata = null;
+  void resetOrderData() {
+    _customerName = ''; _orderReference = ''; _globalColorCode = '';
+    _positions = []; _globalDiscount = 0; _errorMessage = null;
     notifyListeners();
   }
 
-  // Toplamlar
-  double get toplamMaliyet => _pozlar.fold(
-    0,
-    (s, p) =>
-        s + p.hesaplananUrunler.fold(0, (s2, u) => s2 + u.maliyet * u.miktar),
-  );
+  double get toplamMaliyet => _positions.fold(0, (s, p) => s + p.hesaplananUrunler.fold(0, (s2, u) => s2 + u.maliyet * u.miktar));
 }
 
 // ════════════════════════════════════════════════════════════
-// STOK PROVIDER
+// STOK PROVIDER VE NAVIGATION PROVIDER
 // ════════════════════════════════════════════════════════════
 class StokProvider extends ChangeNotifier {
   final FirebaseService _service;
   List<StokKarti> _stokKartlari = [];
-  // DİKKAT: Test için Firebase boşsa bile listeyi varsayılan renklerle başlatıyoruz!
-  List<RenkTanim> _renkler = DefaultRenkler.renkler
-      .map((e) => RenkTanim(
-    id: e['kod'].toString(),
-    renkKodu: e['kod'].toString(),
-    renkAdi: e['ad'].toString(),
-    ortaDikmeVar: e['ortaDikmeVar'] as bool,
-  ))
-      .toList();
-  bool _yukleniyor = false;
-  String _aramaMetni = '';
-  String _filtreGrubu = '';
+  List<RenkTanim> _renkler = DefaultRenkler.renkler.map((e) => RenkTanim(id: e['kod'].toString(), renkKodu: e['kod'].toString(), renkAdi: e['ad'].toString(), ortaDikmeVar: e['ortaDikmeVar'] as bool)).toList();
+  bool _isLoading = false;
+  String _searchQuery = '';
+  String _filterGroup = '';
 
   StokProvider(this._service);
-
   List<StokKarti> get stokKartlari => _stokKartlari;
   List<RenkTanim> get renkler => _renkler;
-  bool get yukleniyor => _yukleniyor;
-
+  bool get yukleniyor => _isLoading;
   List<StokKarti> get filtrelenmisKartlar {
-    var liste = _stokKartlari;
-    if (_aramaMetni.isNotEmpty) {
-      liste = liste
-          .where(
-            (k) =>
-                k.stokAdi.toLowerCase().contains(_aramaMetni.toLowerCase()) ||
-                k.stokKodu.toLowerCase().contains(_aramaMetni.toLowerCase()),
-          )
-          .toList();
-    }
-    if (_filtreGrubu.isNotEmpty) {
-      liste = liste.where((k) => k.urunGrubu == _filtreGrubu).toList();
-    }
-    return liste;
+    var list = _stokKartlari;
+    if (_searchQuery.isNotEmpty) list = list.where((k) => k.stokAdi.toLowerCase().contains(_searchQuery.toLowerCase()) || k.stokKodu.toLowerCase().contains(_searchQuery.toLowerCase())).toList();
+    if (_filterGroup.isNotEmpty) list = list.where((k) => k.urunGrubu == _filterGroup).toList();
+    return list;
   }
+  List<String> get urunGruplari => _stokKartlari.map((k) => k.urunGrubu).toSet().toList()..sort();
+  List<StokKarti> get kritikStoklar => _stokKartlari.where((k) => k.mevcutStok <= k.minimumStok).toList();
 
-  List<String> get urunGruplari =>
-      _stokKartlari.map((k) => k.urunGrubu).toSet().toList()..sort();
-
-  List<StokKarti> get kritikStoklar =>
-      _stokKartlari.where((k) => k.mevcutStok <= k.minimumStok).toList();
-
-  void ara(String metin) {
-    _aramaMetni = metin;
-    notifyListeners();
-  }
-
-  void filtreGrubu(String grup) {
-    _filtreGrubu = grup;
-    notifyListeners();
-  }
-
-  void stokKartlariDinle() {
-    _service.stokKartlariStream().listen((liste) {
-      _stokKartlari = liste;
-      notifyListeners();
-    });
-  }
-
-  void renklerDinle() {
-    _service.renklerStream().listen((liste) {
-      _renkler = liste;
-      notifyListeners();
-    });
-  }
+  void ara(String query) { _searchQuery = query; notifyListeners(); }
+  void filtreGrubu(String group) { _filterGroup = group; notifyListeners(); }
+  void stokKartlariDinle() { _service.stokKartlariStream().listen((list) { _stokKartlari = list; notifyListeners(); }); }
+  void renklerDinle() { _service.renklerStream().listen((list) { _renkler = list; notifyListeners(); }); }
 
   Future<void> stokKartiKaydet(StokKarti kart) async {
-    _yukleniyor = true;
-    notifyListeners();
+    _isLoading = true; notifyListeners();
     try {
-      if (kart.id.isEmpty) {
-        await _service.stokKartiOlustur(kart);
-      } else {
-        await _service.stokKartiGuncelle(kart);
-      }
-    } finally {
-      _yukleniyor = false;
-      notifyListeners();
-    }
-  }
-
-  Future<void> renkEkle(RenkTanim renk) async {
-    await _service.renkEkle(renk);
-  }
-
-  Future<void> renkGuncelle(RenkTanim renk) async {
-    await _service.renkGuncelle(renk);
-  }
-
-  RenkTanim? renkKoduIleGetir(String kod) {
-    try {
-      return _renkler.firstWhere((r) => r.renkKodu == kod);
-    } catch (_) {
-      return null;
-    }
+      if (kart.id.isEmpty) await _service.stokKartiOlustur(kart); else await _service.stokKartiGuncelle(kart);
+    } finally { _isLoading = false; notifyListeners(); }
   }
 }
 
-// ════════════════════════════════════════════════════════════
-// NAVIGATION PROVIDER
-// ════════════════════════════════════════════════════════════
 class NavigationProvider extends ChangeNotifier {
-  String _aktifRota = '/dashboard';
-
-  String get aktifRota => _aktifRota;
-
-  void rotaDegistir(String rota) {
-    _aktifRota = rota;
-    notifyListeners();
-  }
+  String _activeRoute = '/dashboard';
+  String get aktifRota => _activeRoute;
+  void rotaDegistir(String route) { _activeRoute = route; notifyListeners(); }
 }
