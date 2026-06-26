@@ -1,6 +1,30 @@
+import 'package:erp_frontend_project/data/services/firebase_service.dart';
+import 'package:erp_frontend_project/presentation/providers/providers.dart';
+import 'package:erp_frontend_project/presentation/screens/dashboard/dashboard_screen.dart';
+import 'package:erp_frontend_project/presentation/widgets/common/app_shell.dart';
+import 'package:firebase_core/firebase_core.dart' hide FirebaseService;
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
-void main() => runApp(MyApp());
+import 'firebase_options.dart';
+
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  final service = FirebaseService();
+  runApp(
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (context) => AuthProvider(service)),
+        ChangeNotifierProvider(create: (context) => SiparisProvider(service)),
+        ChangeNotifierProvider(create: (context) => StokProvider(service)),
+        ChangeNotifierProvider(create: (context) => NavigationProvider()),
+      ],
+      child: MyApp(),
+    ),
+  );
+}
+
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
@@ -21,8 +45,8 @@ class BodyMyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('Material App Bar')),
-      body: Center(child: Container(child: Text('Hello World'))),
+      backgroundColor: Colors.white,
+      body: AppShell(child: DashboardScreen()),
     );
   }
 }

@@ -1,0 +1,30 @@
+{
+  "project_info": {
+    "project_number": "904947009914",
+    "firebase_url": "https://erp-project-8fc17-default-rtdb.firebaseio.com",
+    "project_id": "erp-project-8fc17",
+    "storage_bucket": "erp-project-8fc17.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:904947009914:android:6ea02dd2769b2928616ec3",
+        "android_client_info": {
+          "package_name": "com.example.erp_frontend_project"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBV578FI-9RM3C52mK3esxfc40p-YmgErc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
