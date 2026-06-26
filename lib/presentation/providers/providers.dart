@@ -1,4 +1,5 @@
 // lib/presentation/providers/providers.dart
+import 'package:erp_frontend_project/core/utils/app_logger.dart';
 import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
 import '../../core/utils/calculation_engine.dart';
@@ -55,6 +56,8 @@ class AuthProvider extends ChangeNotifier {
 // SİPARİŞ PROVIDER - Ana iş mantığı
 // ════════════════════════════════════════════════════════════
 class SiparisProvider extends ChangeNotifier {
+
+
   final FirebaseService _service;
 
   List<Siparis> _siparisler = [];
@@ -80,6 +83,18 @@ class SiparisProvider extends ChangeNotifier {
   String get secilenRenk => _secilenRenk;
   List<SiparisPoz> get pozlar => _pozlar;
   double get genelIskonto => _genelIskonto;
+
+  void ilaveMalzemeEkle(HesaplananUrun urun) {
+    final poz = _pozlar.first; // Şimdilik ilk poza veya genel bir listeye ekleyebiliriz
+    urun = HesaplananUrun(
+      stokKodu: urun.stokKodu,
+      stokAdi: urun.stokAdi,
+      miktar: urun.miktar,
+      ilaveMalzeme: true, // Transit işaretledik
+    );
+    poz.hesaplananUrunler.add(urun);
+    notifyListeners();
+  }
 
   void siparislerDinle() {
     _service.siparislerStream().listen((liste) {
@@ -245,11 +260,16 @@ class SiparisProvider extends ChangeNotifier {
   // ─── Hesaplama
   Future<void> hesaplaBomlariniPatlaAt(String pozId) async {
     final poz = pozBul(pozId);
-    if (poz == null) return;
+    if (poz == null) {
+      AppLogger.error("Poz bulunamadı!", pozId, StackTrace.current);
+      return;
+    }
+
     _yukleniyor = true;
     notifyListeners();
 
     try {
+      AppLogger.info("Hesaplama başladı: Poz ID $pozId");
       final urunler = <HesaplananUrun>[];
 
       for (final bolme in poz.bolmeler) {
@@ -408,8 +428,13 @@ class SiparisProvider extends ChangeNotifier {
       }
 
       poz.hesaplananUrunler = urunler;
-    } catch (e) {
-      _hata = e.toString();
+      AppLogger.info("Hesaplama tamamlandı. ${poz.hesaplananUrunler.length} ürün bulundu.");
+    } catch (e, stack) {
+      AppLogger.error("Hesaplama sırasında hata oluştu!", e, stack);
+      _hata = "Hesaplama hatası: ${e.toString()}";
+    } finally {
+      _yukleniyor = false;
+      notifyListeners();
     }
 
     _yukleniyor = false;
@@ -420,6 +445,7 @@ class SiparisProvider extends ChangeNotifier {
   Future<String?> siparisKaydet() async {
     if (_musteriAdi.isEmpty) {
       _hata = 'Müşteri adı zorunludur.';
+      debugPrint(_hata);
       notifyListeners();
       return null;
     }
@@ -473,7 +499,15 @@ class SiparisProvider extends ChangeNotifier {
 class StokProvider extends ChangeNotifier {
   final FirebaseService _service;
   List<StokKarti> _stokKartlari = [];
-  List<RenkTanim> _renkler = [];
+  // DİKKAT: Test için Firebase boşsa bile listeyi varsayılan renklerle başlatıyoruz!
+  List<RenkTanim> _renkler = DefaultRenkler.renkler
+      .map((e) => RenkTanim(
+    id: e['kod'].toString(),
+    renkKodu: e['kod'].toString(),
+    renkAdi: e['ad'].toString(),
+    ortaDikmeVar: e['ortaDikmeVar'] as bool,
+  ))
+      .toList();
   bool _yukleniyor = false;
   String _aramaMetni = '';
   String _filtreGrubu = '';

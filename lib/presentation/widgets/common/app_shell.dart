@@ -109,13 +109,18 @@ class SidebarWidget extends StatelessWidget {
                 rota: AppRoutes.dashboard,
                 aktif: nav.aktifRota == AppRoutes.dashboard,
               ),
+              // YENİ EKLENEN MENÜ ELEMANI
+              _SidebarItem(
+                ikon: Icons.add_circle_outline,
+                baslik: 'Yeni Sipariş / Teklif',
+                rota: AppRoutes.newOrder,
+                aktif: nav.aktifRota == AppRoutes.newOrder,
+              ),
               _SidebarItem(
                 ikon: Icons.receipt_long_rounded,
                 baslik: 'Siparişler / Teklifler',
                 rota: AppRoutes.orders,
-                aktif:
-                    nav.aktifRota == AppRoutes.orders ||
-                    nav.aktifRota.startsWith('/orders'),
+                aktif: nav.aktifRota == AppRoutes.orders,
               ),
             ],
           ),
